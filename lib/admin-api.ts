@@ -129,6 +129,46 @@ export const listPayments = unstable_cache(
   cacheOpts(TAG.payments),
 );
 
+export type ActivityKind = "grant" | "spend" | "refund" | "other";
+
+export type AdminActivityEvent = {
+  id: string;
+  user_id: string;
+  user_email: string;
+  delta: number;
+  balance_after: number;
+  reason: string;
+  kind: ActivityKind;
+  label: string;
+  meta: Record<string, unknown> | null;
+  created_at: string | null;
+};
+
+export const listActivity = unstable_cache(
+  async (
+    page: number,
+    pageSize: number,
+    q: string,
+    reason: string,
+    kind: string,
+  ): Promise<{
+    items: AdminActivityEvent[];
+    total: number;
+    reasons: string[];
+  }> => {
+    const qs = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+    });
+    if (q) qs.set("q", q);
+    if (reason) qs.set("reason", reason);
+    if (kind) qs.set("kind", kind);
+    return await backendFetch(`/internal/admin/activity?${qs.toString()}`);
+  },
+  ["admin-activity"],
+  cacheOpts(TAG.activity),
+);
+
 export type AdminCreditCode = {
   code: string;
   credits_each: number;
