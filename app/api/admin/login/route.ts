@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   const jar = await cookies();
   jar.set(env.SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: env.SESSION_COOKIE_SECURE,
     sameSite: "lax",
     path: "/",
     maxAge: env.SESSION_MAX_AGE,

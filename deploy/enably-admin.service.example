@@ -6,7 +6,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=ubuntu
+# Amazon Linux 2023 default user is ec2-user. Use 'ubuntu' on Ubuntu AMIs.
+User=ec2-user
+Group=ec2-user
 WorkingDirectory=/srv/enably-admin/current
 EnvironmentFile=/etc/enably-admin.env
 ExecStart=/usr/bin/node server.js
@@ -15,7 +17,6 @@ RestartSec=3
 KillSignal=SIGTERM
 TimeoutStopSec=15
 
-# Hardening
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
