@@ -14,7 +14,7 @@ This version (16.x) has breaking changes — APIs, conventions, and file structu
    with a tag. Default TTL is `ADMIN_CACHE_TTL` seconds. Manual refresh uses
    `revalidateTag`. No client-side polling, no SWR, no `revalidateOnFocus`.
 3. **No secrets in the browser.** `lib/env.ts` is server-only. `BACKEND_URL`
-   and `ADMIN_API_KEY` must never end up in a Client Component or be
+   and `INTERNAL_API_SECRET` must never end up in a Client Component or be
    serialised to the client.
 4. **Server Components by default.** Add `"use client"` only when you truly
    need browser-only interactivity.

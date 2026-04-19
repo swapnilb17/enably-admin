@@ -35,11 +35,28 @@ jobs:
       - name: Build (Next.js standalone)
         run: npm run build
 
+      # All steps below only run when the deploy secrets are configured. That
+      # way the very first push (before secrets are set) goes green at the
+      # build step instead of red at SSH.
+      - name: Check deploy secrets
+        id: secrets
+        env:
+          HOST: ${{ secrets.ADMIN_EC2_HOST }}
+          USER: ${{ secrets.ADMIN_EC2_USER }}
+          KEY: ${{ secrets.ADMIN_EC2_SSH_KEY }}
+        run: |
+          if [ -n "$HOST" ] && [ -n "$USER" ] && [ -n "$KEY" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::ADMIN_EC2_HOST / ADMIN_EC2_USER / ADMIN_EC2_SSH_KEY not all set; skipping deploy."
+          fi
+
       - name: Pack release tarball
+        if: steps.secrets.outputs.ok == 'true'
         run: |
           set -euo pipefail
           mkdir -p release
-          # Next standalone bundle includes server.js + minimal node_modules.
           cp -R .next/standalone/. release/
           mkdir -p release/.next
           cp -R .next/static release/.next/static
@@ -47,6 +64,7 @@ jobs:
           tar -C release -czf bundle.tar.gz .
 
       - name: Setup SSH
+        if: steps.secrets.outputs.ok == 'true'
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.ADMIN_EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
@@ -54,6 +72,7 @@ jobs:
           ssh-keyscan -H "${{ secrets.ADMIN_EC2_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Upload bundle
+        if: steps.secrets.outputs.ok == 'true'
         env:
           USER: ${{ secrets.ADMIN_EC2_USER }}
           HOST: ${{ secrets.ADMIN_EC2_HOST }}
@@ -65,6 +84,7 @@ jobs:
           ssh "$USER@$HOST" "tar -C $REMOTE_DIR/releases/$REL -xzf $REMOTE_DIR/releases/$REL/bundle.tar.gz && rm $REMOTE_DIR/releases/$REL/bundle.tar.gz"
 
       - name: Activate release & restart service
+        if: steps.secrets.outputs.ok == 'true'
         env:
           USER: ${{ secrets.ADMIN_EC2_USER }}
           HOST: ${{ secrets.ADMIN_EC2_HOST }}
@@ -74,6 +94,7 @@ jobs:
           ssh "$USER@$HOST" "ln -sfn $REMOTE_DIR/releases/$REL $REMOTE_DIR/current && sudo systemctl restart $SERVICE_NAME && sudo systemctl reload nginx"
 
       - name: Smoke test
+        if: steps.secrets.outputs.ok == 'true'
         env:
           USER: ${{ secrets.ADMIN_EC2_USER }}
           HOST: ${{ secrets.ADMIN_EC2_HOST }}
@@ -88,7 +109,7 @@ jobs:
           echo "Service did not respond on health endpoint"; exit 1
 
       - name: Prune old releases (keep last 5)
-        if: always()
+        if: always() && steps.secrets.outputs.ok == 'true'
         env:
           USER: ${{ secrets.ADMIN_EC2_USER }}
           HOST: ${{ secrets.ADMIN_EC2_HOST }}

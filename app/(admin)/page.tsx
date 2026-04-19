@@ -40,7 +40,7 @@ async function BackendStatusCard() {
           <br />
           <span style={{ color: "var(--muted)" }}>
             Add <code>/internal/admin/health</code> on the existing FastAPI and configure
-            <code> ADMIN_API_KEY</code> + <code>BACKEND_URL</code> env vars on this host.
+            <code> INTERNAL_API_SECRET</code> + <code>BACKEND_URL</code> env vars on this host.
           </span>
         </p>
       )}

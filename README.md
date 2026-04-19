@@ -5,7 +5,7 @@ Internal admin & observability console for the Enably platform.
 - Single Next.js 16 app (App Router, `output: "standalone"`).
 - UI under `app/(admin)/...`, BFF route handlers under `app/api/admin/*`.
 - Talks **only** to `/internal/admin/*` on the existing FastAPI backend, with
-  a server-side `X-Admin-Key` header. The browser never sees the key.
+  a server-side `x-internal-api-key` header. The browser never sees the key.
 - Every read goes through `unstable_cache` with a configurable TTL
   (`ADMIN_CACHE_TTL`, default 60s) so opening pages repeatedly does **not**
   generate extra load on the existing app server. A manual "Refresh" button
@@ -15,7 +15,7 @@ Internal admin & observability console for the Enably platform.
 
 ```bash
 cp .env.example .env.local
-# fill in BACKEND_URL, ADMIN_API_KEY, ADMIN_PASSWORD, SESSION_SECRET
+# fill in BACKEND_URL, INTERNAL_API_SECRET, ADMIN_PASSWORD, SESSION_SECRET
 # generate a secret: openssl rand -base64 48
 npm install
 npm run dev
@@ -27,8 +27,8 @@ The app starts at `/login`. Use the `ADMIN_PASSWORD` you set above.
 ## Backend contract (to be added on the existing FastAPI)
 
 These are the endpoints `lib/admin-api.ts` expects. They must be guarded by a
-new `_require_admin_api_key` dependency that validates the `X-Admin-Key`
-header against a server-side `ADMIN_API_KEY` env var.
+new `_require_internal_api_key` dependency that validates the `x-internal-api-key`
+header against a server-side `INTERNAL_API_SECRET` env var.
 
 | Method | Path                              | Purpose                          |
 |--------|-----------------------------------|----------------------------------|
@@ -114,7 +114,7 @@ the systemd service, and reloads Nginx.
 See `AGENTS.md` for non-negotiables and `app/` for the layout. In short:
 
 ```
-Browser ──HTTPS (cookie only)──> Next.js on Admin EC2 ──HTTPS + X-Admin-Key──> FastAPI on App EC2
+Browser ──HTTPS (cookie only)──> Next.js on Admin EC2 ──HTTPS + x-internal-api-key──> FastAPI on App EC2
                                   ^                                              ^
                                   └ unstable_cache (60s) reduces backend load    └ /internal/admin/*
 ```

@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/admin-auth";
 
+// Admin pages call FastAPI and read cookies; they must never be statically
+// pre-rendered at build time.
+export const dynamic = "force-dynamic";
+
 const NAV = [
   { href: "/", label: "Overview" },
   { href: "/users", label: "Users & credits" },

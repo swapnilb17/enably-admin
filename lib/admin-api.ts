@@ -18,7 +18,9 @@ class BackendError extends Error {
 async function backendFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const url = `${env.BACKEND_URL}${path.startsWith("/") ? path : `/${path}`}`;
   const headers = new Headers(init.headers);
-  headers.set("X-Admin-Key", env.ADMIN_API_KEY);
+  // Reuse the existing FastAPI internal-trust header (matches
+  // _require_internal_api_key in EnablyAI_VGEN/backend/app/main.py).
+  headers.set("x-internal-api-key", env.INTERNAL_API_SECRET);
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -46,8 +48,11 @@ export const TAG = {
   activity: "admin:activity",
 } as const;
 
+// Read TTL directly (not via env proxy) so this module can be evaluated
+// during `next build` without all required secrets present. Defaults to 60s.
+const CACHE_TTL = Number(process.env.ADMIN_CACHE_TTL || "60");
 const cacheOpts = (tag: string) => ({
-  revalidate: env.ADMIN_CACHE_TTL,
+  revalidate: CACHE_TTL,
   tags: [tag],
 });
 
