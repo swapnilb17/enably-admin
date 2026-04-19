@@ -1,0 +1,96 @@
+name: Deploy admin to EC2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-admin
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "20"
+  REMOTE_DIR: /srv/enably-admin
+  SERVICE_NAME: enably-admin
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build (Next.js standalone)
+        run: npm run build
+
+      - name: Pack release tarball
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          # Next standalone bundle includes server.js + minimal node_modules.
+          cp -R .next/standalone/. release/
+          mkdir -p release/.next
+          cp -R .next/static release/.next/static
+          if [ -d public ]; then cp -R public release/public; fi
+          tar -C release -czf bundle.tar.gz .
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ADMIN_EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.ADMIN_EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload bundle
+        env:
+          USER: ${{ secrets.ADMIN_EC2_USER }}
+          HOST: ${{ secrets.ADMIN_EC2_HOST }}
+          REL: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh "$USER@$HOST" "sudo mkdir -p $REMOTE_DIR/releases/$REL && sudo chown -R $USER:$USER $REMOTE_DIR"
+          scp bundle.tar.gz "$USER@$HOST:$REMOTE_DIR/releases/$REL/bundle.tar.gz"
+          ssh "$USER@$HOST" "tar -C $REMOTE_DIR/releases/$REL -xzf $REMOTE_DIR/releases/$REL/bundle.tar.gz && rm $REMOTE_DIR/releases/$REL/bundle.tar.gz"
+
+      - name: Activate release & restart service
+        env:
+          USER: ${{ secrets.ADMIN_EC2_USER }}
+          HOST: ${{ secrets.ADMIN_EC2_HOST }}
+          REL: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh "$USER@$HOST" "ln -sfn $REMOTE_DIR/releases/$REL $REMOTE_DIR/current && sudo systemctl restart $SERVICE_NAME && sudo systemctl reload nginx"
+
+      - name: Smoke test
+        env:
+          USER: ${{ secrets.ADMIN_EC2_USER }}
+          HOST: ${{ secrets.ADMIN_EC2_HOST }}
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            if ssh "$USER@$HOST" "curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/admin/health || true" | grep -qE '200|401|403'; then
+              echo "Service responding"; exit 0
+            fi
+            sleep 3
+          done
+          echo "Service did not respond on health endpoint"; exit 1
+
+      - name: Prune old releases (keep last 5)
+        if: always()
+        env:
+          USER: ${{ secrets.ADMIN_EC2_USER }}
+          HOST: ${{ secrets.ADMIN_EC2_HOST }}
+        run: |
+          ssh "$USER@$HOST" "ls -1dt $REMOTE_DIR/releases/* | tail -n +6 | xargs -r rm -rf" || true
