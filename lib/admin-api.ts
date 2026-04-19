@@ -129,7 +129,44 @@ export const listPayments = unstable_cache(
   cacheOpts(TAG.payments),
 );
 
+export type AdminCreditCode = {
+  code: string;
+  credits_each: number;
+  max_redemptions: number;
+  redeemed_count: number;
+  active: boolean;
+  campaign: string | null;
+  expires_at: string | null;
+  created_at: string | null;
+};
+
+export const listCreditCodes = unstable_cache(
+  async (
+    page: number,
+    pageSize: number,
+    activeOnly: boolean,
+  ): Promise<{ items: AdminCreditCode[]; total: number }> => {
+    const qs = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+    });
+    if (activeOnly) qs.set("active_only", "true");
+    return await backendFetch(`/internal/admin/codes?${qs.toString()}`);
+  },
+  ["admin-credit-codes"],
+  cacheOpts(TAG.codes),
+);
+
 // ---- Write helpers (NOT cached, always invalidate the read tag) ----
+
+export type CreatedCodes = {
+  codes: string[];
+  count: number;
+  credits_each: number;
+  max_redemptions_per_code: number;
+  campaign: string | null;
+  expires_at: string | null;
+};
 
 export async function createCreditCode(input: {
   credits_each: number;
@@ -137,14 +174,25 @@ export async function createCreditCode(input: {
   max_redemptions_per_code?: number;
   expires_at?: string;
   campaign?: string;
-}): Promise<{ codes: string[] }> {
-  const result = await backendFetch<{ codes: string[] }>(
-    "/internal/admin/codes",
-    {
-      method: "POST",
-      body: JSON.stringify(input),
-    },
-  );
+}): Promise<CreatedCodes> {
+  const result = await backendFetch<CreatedCodes>("/internal/admin/codes", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  revalidateTag(TAG.codes, "max");
+  return result;
+}
+
+export async function deactivateCreditCode(
+  code: string,
+): Promise<{ code: string; active: boolean; was_active: boolean }> {
+  const result = await backendFetch<{
+    code: string;
+    active: boolean;
+    was_active: boolean;
+  }>(`/internal/admin/codes/${encodeURIComponent(code)}/deactivate`, {
+    method: "POST",
+  });
   revalidateTag(TAG.codes, "max");
   return result;
 }
