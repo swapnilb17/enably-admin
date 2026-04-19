@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSession } from "@/lib/admin-auth";
 import { env } from "@/lib/env";
+import { publicUrl } from "@/lib/public-url";
 
 export async function POST(req: Request) {
   const form = await req.formData();
@@ -9,7 +10,7 @@ export async function POST(req: Request) {
   const next = String(form.get("next") ?? "/") || "/";
 
   if (!password || !timingSafeEqual(password, env.ADMIN_PASSWORD)) {
-    const url = new URL("/login", req.url);
+    const url = publicUrl(req, "/login");
     url.searchParams.set("error", "1");
     if (next && next !== "/") url.searchParams.set("next", next);
     return NextResponse.redirect(url, { status: 303 });
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
     path: "/",
     maxAge: env.SESSION_MAX_AGE,
   });
-  return NextResponse.redirect(new URL(next.startsWith("/") ? next : "/", req.url), {
+  return NextResponse.redirect(publicUrl(req, next.startsWith("/") ? next : "/"), {
     status: 303,
   });
 }
