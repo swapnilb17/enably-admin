@@ -237,6 +237,113 @@ export async function deactivateCreditCode(
   return result;
 }
 
+// ---- Content templates ----
+
+export type AdminTemplate = {
+  id: string;
+  kind: "image" | "video";
+  title: string;
+  description: string | null;
+  category: string | null;
+  language: string | null;
+  s3_key: string;
+  content_type: string;
+  size_bytes: number;
+  width: number | null;
+  height: number | null;
+  duration_seconds: number | null;
+  tags: string | null;
+  published: boolean;
+  sort_order: number;
+  preview_url: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export const listTemplates = unstable_cache(
+  async (
+    page: number,
+    pageSize: number,
+    q: string,
+    kind: string,
+    published: string,
+  ): Promise<{ items: AdminTemplate[]; total: number }> => {
+    const qs = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+    });
+    if (q) qs.set("q", q);
+    if (kind) qs.set("kind", kind);
+    if (published) qs.set("published", published);
+    return await backendFetch(`/internal/admin/templates?${qs.toString()}`);
+  },
+  ["admin-templates"],
+  cacheOpts(TAG.templates),
+);
+
+/** Stream a multipart upload straight through to FastAPI.
+ * We rebuild a fresh FormData rather than forwarding the caller's object so the
+ * Content-Type (with boundary) is generated correctly by fetch.
+ */
+export async function uploadTemplate(form: FormData): Promise<AdminTemplate> {
+  const url = `${env.BACKEND_URL}/internal/admin/templates/upload`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "x-internal-api-key": env.INTERNAL_API_SECRET },
+    body: form,
+    cache: "no-store",
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new BackendError(res.status, text || res.statusText);
+  }
+  const out = (await res.json()) as AdminTemplate;
+  revalidateTag(TAG.templates, "max");
+  return out;
+}
+
+export async function updateTemplate(
+  id: string,
+  patch: Partial<
+    Pick<
+      AdminTemplate,
+      "title" | "description" | "category" | "language" | "tags" | "published" | "sort_order"
+    >
+  >,
+): Promise<AdminTemplate> {
+  const out = await backendFetch<AdminTemplate>(
+    `/internal/admin/templates/${encodeURIComponent(id)}`,
+    { method: "PATCH", body: JSON.stringify(patch) },
+  );
+  revalidateTag(TAG.templates, "max");
+  return out;
+}
+
+export async function toggleTemplatePublish(
+  id: string,
+  publish: boolean,
+): Promise<{ id: string; published: boolean }> {
+  const qs = new URLSearchParams({ publish: String(publish) });
+  const out = await backendFetch<{ id: string; published: boolean }>(
+    `/internal/admin/templates/${encodeURIComponent(id)}/publish?${qs.toString()}`,
+    { method: "POST" },
+  );
+  revalidateTag(TAG.templates, "max");
+  return out;
+}
+
+export async function deleteTemplate(
+  id: string,
+): Promise<{ id: string; deleted: boolean; s3_key: string }> {
+  const out = await backendFetch<{ id: string; deleted: boolean; s3_key: string }>(
+    `/internal/admin/templates/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+  revalidateTag(TAG.templates, "max");
+  return out;
+}
+
 // Manual refresh: bust caches on demand from a server action / button click.
 export async function refreshAll(): Promise<void> {
   for (const t of Object.values(TAG)) revalidateTag(t, "max");
