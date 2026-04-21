@@ -247,6 +247,7 @@ export type AdminTemplate = {
   category: string | null;
   language: string | null;
   s3_key: string;
+  thumbnail_s3_key: string | null;
   content_type: string;
   size_bytes: number;
   width: number | null;
@@ -256,6 +257,7 @@ export type AdminTemplate = {
   published: boolean;
   sort_order: number;
   preview_url: string | null;
+  thumbnail_url: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -327,6 +329,19 @@ export async function toggleTemplatePublish(
   const qs = new URLSearchParams({ publish: String(publish) });
   const out = await backendFetch<{ id: string; published: boolean }>(
     `/internal/admin/templates/${encodeURIComponent(id)}/publish?${qs.toString()}`,
+    { method: "POST" },
+  );
+  revalidateTag(TAG.templates, "max");
+  return out;
+}
+
+/** (Re)generate the JPG poster frame for an existing video template.
+ * Useful for backfilling rows that were uploaded before thumbnails shipped,
+ * or refreshing one whose auto-pick frame is poor. Image templates 400.
+ */
+export async function regenerateTemplateThumbnail(id: string): Promise<AdminTemplate> {
+  const out = await backendFetch<AdminTemplate>(
+    `/internal/admin/templates/${encodeURIComponent(id)}/regenerate-thumbnail`,
     { method: "POST" },
   );
   revalidateTag(TAG.templates, "max");

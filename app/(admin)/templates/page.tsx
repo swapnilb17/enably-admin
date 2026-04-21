@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import {
   deleteTemplate,
   listTemplates,
+  regenerateTemplateThumbnail,
   TAG,
   toggleTemplatePublish,
   uploadTemplate,
@@ -65,6 +66,22 @@ async function deleteAction(formData: FormData) {
   await deleteTemplate(id);
   revalidateTag(TAG.templates, "max");
   redirect("/templates");
+}
+
+async function regenThumbAction(formData: FormData) {
+  "use server";
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  try {
+    await regenerateTemplateThumbnail(id);
+  } catch (e) {
+    const msg = encodeURIComponent(
+      (e as Error).message?.slice(0, 180) || "regen failed",
+    );
+    redirect(`/templates?err=${msg}`);
+  }
+  revalidateTag(TAG.templates, "max");
+  redirect("/templates?ok=thumb");
 }
 
 function fmtBytes(n: number): string {
@@ -255,7 +272,10 @@ function TemplateCard({ t }: { t: AdminTemplate }) {
           t.kind === "video" ? (
             // eslint-disable-next-line jsx-a11y/media-has-caption
             <video
-              src={t.preview_url}
+              // Append #t=0.5 so browsers without poster support still seek
+              // to a non-black frame for the still preview.
+              src={`${t.preview_url}#t=0.5`}
+              poster={t.thumbnail_url ?? undefined}
               className="h-full w-full object-cover"
               muted
               loop
@@ -335,6 +355,22 @@ function TemplateCard({ t }: { t: AdminTemplate }) {
             {t.published ? "Unpublish" : "Publish"}
           </button>
         </form>
+        {t.kind === "video" ? (
+          <form action={regenThumbAction}>
+            <input type="hidden" name="id" value={t.id} />
+            <button
+              type="submit"
+              title="Re-extract poster frame from this video"
+              className="rounded border px-2 py-1 text-xs"
+              style={{
+                borderColor: "var(--border)",
+                color: "var(--muted)",
+              }}
+            >
+              {t.thumbnail_url ? "Refresh thumb" : "Add thumb"}
+            </button>
+          </form>
+        ) : null}
         <form action={deleteAction} className="ml-auto">
           <input type="hidden" name="id" value={t.id} />
           <button
