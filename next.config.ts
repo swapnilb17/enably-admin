@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
       // Server Actions don't reject the upload before it reaches FastAPI.
       bodySizeLimit: "55mb",
     },
+    // proxy.ts buffers request bodies so both middleware and the route
+    // handler can read them. Default cap is 10 MB and truncates template
+    // video uploads without returning a proper error; match the Server
+    // Action limit so all three layers agree.
+    proxyClientMaxBodySize: "55mb",
   },
 };
 
