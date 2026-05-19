@@ -13,6 +13,20 @@ type EnvShape = {
   SESSION_MAX_AGE: number;
   ADMIN_CACHE_TTL: number;
   SESSION_COOKIE_SECURE: boolean;
+  // Phoenix observability + prompt management. Optional: when unset, the
+  // Prompts and Observability screens render a "not configured" state instead
+  // of failing the whole app.
+  PHOENIX_BASE_URL: string;
+  PHOENIX_API_KEY: string;
+  PHOENIX_PROJECT_ID: string;
+  PHOENIX_PROJECT_NAME: string;
+  PHOENIX_UI_BASE_URL: string;
+  // GitHub PR helper for "promote to code". Optional in the same way as the
+  // Phoenix vars; promote-to-code action returns 503 when these are missing.
+  GITHUB_REPO: string;
+  GITHUB_TOKEN: string;
+  GITHUB_DEFAULT_BRANCH: string;
+  GITHUB_PROMPT_REGISTRY_PATH: string;
 };
 
 function required(name: string, value: string | undefined): string {
@@ -52,6 +66,20 @@ function load(): EnvShape {
         process.env.SESSION_COOKIE_SECURE,
         process.env.NODE_ENV === "production" ? "true" : "false",
       ).toLowerCase() === "true",
+    // Optional vars: empty string means "not configured" and the
+    // corresponding feature degrades gracefully.
+    PHOENIX_BASE_URL: optional(process.env.PHOENIX_BASE_URL, "").replace(/\/$/, ""),
+    PHOENIX_API_KEY: optional(process.env.PHOENIX_API_KEY, ""),
+    PHOENIX_PROJECT_ID: optional(process.env.PHOENIX_PROJECT_ID, ""),
+    PHOENIX_PROJECT_NAME: optional(process.env.PHOENIX_PROJECT_NAME, "enablyai-vgen-prod"),
+    PHOENIX_UI_BASE_URL: optional(process.env.PHOENIX_UI_BASE_URL, "").replace(/\/$/, ""),
+    GITHUB_REPO: optional(process.env.GITHUB_REPO, ""),
+    GITHUB_TOKEN: optional(process.env.GITHUB_TOKEN, ""),
+    GITHUB_DEFAULT_BRANCH: optional(process.env.GITHUB_DEFAULT_BRANCH, "main"),
+    GITHUB_PROMPT_REGISTRY_PATH: optional(
+      process.env.GITHUB_PROMPT_REGISTRY_PATH,
+      "backend/app/prompts/registry.py",
+    ),
   };
   return cache;
 }

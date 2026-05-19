@@ -46,6 +46,8 @@ export const TAG = {
   codes: "admin:codes",
   templates: "admin:templates",
   activity: "admin:activity",
+  prompts: "admin:prompts",
+  observability: "admin:observability",
 } as const;
 
 // Read TTL directly (not via env proxy) so this module can be evaluated
@@ -363,3 +365,39 @@ export async function deleteTemplate(
 export async function refreshAll(): Promise<void> {
   for (const t of Object.values(TAG)) revalidateTag(t, "max");
 }
+
+// ---------------------------------------------------------------------------
+// Prompts (code-canonical mirror)
+// ---------------------------------------------------------------------------
+
+export type CodePrompt = {
+  /** Dotted name, e.g. "script.monologue.system" — canonical app-side id. */
+  name: string;
+  /** Semver-ish version, currently "v1" / "v2" / .... Bumped on each promote. */
+  version: string;
+  description: string;
+  template: string;
+  /** Same prompt under Phoenix's name format (dashes). Used for deep links. */
+  phoenix_identifier: string;
+};
+
+export const listCodePrompts = unstable_cache(
+  async (): Promise<{ items: CodePrompt[]; total: number }> => {
+    return await backendFetch<{ items: CodePrompt[]; total: number }>(
+      "/internal/admin/prompts",
+    );
+  },
+  ["admin-prompts-code"],
+  cacheOpts(TAG.prompts),
+);
+
+export const getCodePrompt = unstable_cache(
+  async (name: string): Promise<CodePrompt> => {
+    return await backendFetch<CodePrompt>(
+      `/internal/admin/prompts/${encodeURIComponent(name)}`,
+    );
+  },
+  ["admin-prompt-code"],
+  cacheOpts(TAG.prompts),
+);
+
